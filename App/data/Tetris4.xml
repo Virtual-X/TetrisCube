@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Board Size="444">
+  <Pieces>
+    <Piece Color="R" Size="332" Data="100111010100000000" />
+    <Piece Color="Y" Size="332" Data="010111000000010010" />
+    <Piece Color="B" Size="332" Data="111100100000000100" />
+    <Piece Color="B" Size="332" Data="111100100000100000" />
+    <Piece Color="T" Size="322" Data="111010000010" />
+    <Piece Color="B" Size="322" Data="110011100000" />
+    <Piece Color="Y" Size="322" Data="110010000011" />
+    <Piece Color="Y" Size="322" Data="111100000100" />
+    <Piece Color="R" Size="331" Data="111100100" />
+    <Piece Color="R" Size="421" Data="11110100" />
+    <Piece Color="B" Size="421" Data="11100011" />
+    <Piece Color="R" Size="222" Data="11111000" />
+  </Pieces>
+</Board>

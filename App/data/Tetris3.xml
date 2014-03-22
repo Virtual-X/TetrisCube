@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Board Size="333">
+  <Pieces>
+    <Piece Color="R" Size="322" Data="010011110000" />
+    <Piece Color="R" Size="322" Data="001111001000" />
+    <Piece Color="B" Size="322" Data="111010001000" />
+    <Piece Color="B" Size="222" Data="10111000" />
+    <Piece Color="T" Size="312" Data="111001" />
+    <Piece Color="Y" Size="222" Data="01110100" />
+  </Pieces>
+</Board>
