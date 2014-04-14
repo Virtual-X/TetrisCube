@@ -1,0 +1,14 @@
+4x4x4.Tetris4#Format:BoardSizeXxBoardSizeYxBoardSizeZ.BoardName
+100,111,010;100,000,000.r#Format:PieceMaskZ1Y1,...,PieceMaskZ1YN;...;PieceMaskZMY1,...,PieceMaskZMYN.PieceName
+010,111,000;000,010,010.y
+111,100,100;000,000,100.b
+111,100,100;000,100,000.b
+111,010;000,010.t
+110,011;100,000.b
+110,010;000,011.y
+111,100;000,100.y
+111;100;100.r
+1111,0100.r
+1110,0011.b
+11,11;10,00.r
+
