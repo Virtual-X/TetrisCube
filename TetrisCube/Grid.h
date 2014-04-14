@@ -52,6 +52,10 @@ public:
         return values[GetIndex1D(index)];
     }
 
+    T& operator [] (const int& index) {
+        return values[index];
+    }
+
     void SetPiece(const FixedPiece& piece, bool value) {
         for (size_t j = 0; j < piece.coords.size(); j++) {
             (*this)[piece.coords[j]] = value;
@@ -73,7 +77,7 @@ private:
         for (size_t i = 0; i < offsets.size(); i++) {
             n += index[i + 1] * offsets[i];
         }
-        if (n >= values.size()) {
+        if (n >= (int)values.size()) {
             throw 0;
         }
         return n;
@@ -93,18 +97,27 @@ public:
             offsets.push_back(n);
             n *= size[i];
         }
+        for (int i = 0; i < 256; i++) {
+            nextValid[i] = -1;
+            for (int k = 0; k < 8; k++) {
+                if ((i & (1 << k)) == 0) {
+                    nextValid[i] = k;
+                    break;
+                }
+            }
+        }
     }
 
     template<typename Indices>
     bool operator [] (const Indices& index) const {
         int bit = GetIndex1D(index);
-        return bitset[bit];
-        //return (bitset & (1LL << bit)) != 0;
+        //return bitset[bit];
+        return (bitset & (1LL << bit)) != 0;
     }
 
     bool operator [] (int bit) const {
-        return bitset[bit];
-        //return (bitset & (1LL << bit)) != 0;
+        //return bitset[bit];
+        return (bitset & (1LL << bit)) != 0;
     }
 
     void SetPiece(const FixedPiece& piece, bool value) {
@@ -119,7 +132,27 @@ public:
         return (piece.bitset & bitset) == 0;
     }
 
+    int GetNextValid(int index) const {
+        int pos = nextValid[(bitset >> index) & 0xff];
+        if (pos >= 0)
+            return index + pos;
+        int byte = index / 8;
+        for (int i = byte + 1; i < 8; i++) {
+            pos = nextValid[(bitset >> (i * 8)) & 0xff];
+            if (pos >= 0)
+                return (i * 8) + pos;
+        }
+        return -1;
+    }
+
+    uint64_t GetBits() const {
+        return bitset;
+    }
+
 private:
+
+    int nextValid[256];
+
     template<typename Indices>
     int GetIndex1D(const Indices& index) const {
         int n = index[0];

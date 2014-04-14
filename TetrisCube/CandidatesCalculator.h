@@ -5,11 +5,13 @@
 #include "Board.h"
 
 #include <iostream>
+#include <functional>
 
 class CandidatesCalculator {
 public:
 
-    typedef std::shared_ptr<Grid<std::vector<FixedPieces>>> Candidates;
+    typedef Grid<std::vector<FixedPieces>> CandidatesGrid;
+    typedef std::shared_ptr<CandidatesGrid> Candidates;
 
     CandidatesCalculator(const std::shared_ptr<const Board>& board)
         : board(board),
@@ -18,23 +20,36 @@ public:
     }
 
     Candidates GetCandidates() const {
-        auto candidatesPerPiece = std::make_shared<Grid<std::vector<FixedPieces>>>(gridSize);
+        auto candidatesPerPiece = std::make_shared<CandidatesGrid>(gridSize);
         InitCandidates(*candidatesPerPiece);
         Evaluate(*candidatesPerPiece);
         return candidatesPerPiece;
     }
 
     Candidates GetSnakeCandidates(Coords& order) const {
-        auto candidatesPerPiece = std::make_shared<Grid<std::vector<FixedPieces>>>(gridSize);
+        auto candidatesPerPiece = std::make_shared<CandidatesGrid>(gridSize);
         InitSnakeCandidates(*candidatesPerPiece, order);
         Evaluate(*candidatesPerPiece);
         return candidatesPerPiece;
     }
 
+    Candidates GetLeastCandidates(Coords& order) const {
+        auto candidatesPerPiece = std::make_shared<CandidatesGrid>(gridSize);
+        InitLeastCandidates(*candidatesPerPiece, order);
+        Evaluate(*candidatesPerPiece);
+        return candidatesPerPiece;
+    }
+
     Candidates GetOptimalCandidates(Coords& order) const {
-        auto candidatesPerPiece = std::make_shared<Grid<std::vector<FixedPieces>>>(gridSize);
+        auto candidatesPerPiece = std::make_shared<CandidatesGrid>(gridSize);
         InitOptimalCandidates(*candidatesPerPiece, order);
         Evaluate(*candidatesPerPiece);
+        return candidatesPerPiece;
+    }
+
+    Candidates Reorder(const Candidates& candidates, const Coords& order) {
+        auto candidatesPerPiece = std::make_shared<CandidatesGrid>(gridSize);
+        DoReorder(*candidatesPerPiece, *candidates, order);
         return candidatesPerPiece;
     }
 
@@ -92,7 +107,7 @@ private:
         }
     }
 
-    void AddCandidates(Grid<std::vector<FixedPieces>>& candidatesPerPiece, Grid<>& tempGrid, const Coord& pos, int fixedPiece) const {
+    void AddCandidates(CandidatesGrid& candidatesPerPiece, Grid<>& tempGrid, const Coord& pos, int fixedPiece) const {
         candidatesPerPiece[pos].resize(piecesCount);
         const Pieces& p = board->GetPieces();
         for (int i = 0; i < piecesCount; i++) {
@@ -108,7 +123,7 @@ private:
         tempGrid[pos] = true;
     }
 
-    Coord GetOptimalCoord(const Grid<>& tempGrid, int fixedPiece) {
+    Coord GetLeastCoord(const Grid<>& tempGrid, int fixedPiece) const {
         Coord pos(Ints(gridSize.size()));
         Coord bestPos(pos);
         size_t bestCount = -1;
@@ -129,9 +144,9 @@ private:
         return bestPos;
     }
 
-    void InitCandidates(Grid<std::vector<FixedPieces>>& candidatesPerPiece) const {
+    void InitCandidates(CandidatesGrid& candidatesPerPiece) const {
         const Pieces& p = board->GetPieces();
-        int fixedPiece = GetFixedPiece(p);
+        const int fixedPiece = GetFixedPiece(p);
 
         Grid<> tempGrid(gridSize);
         Coord pos(Ints(gridSize.size()));
@@ -141,9 +156,9 @@ private:
         });
     }
 
-    void InitSnakeCandidates(Grid<std::vector<FixedPieces>>& candidatesPerPiece, Coords& order) const {
+    void InitSnakeCandidates(CandidatesGrid& candidatesPerPiece, Coords& order) const {
         const Pieces& p = board->GetPieces();
-        int fixedPiece = GetFixedPiece(p);
+        const int fixedPiece = GetFixedPiece(p);
 
         int gridDim = (int)gridSize.size();
         int dim = gridDim - 1;
@@ -152,7 +167,8 @@ private:
 
         Grid<> tempGrid(gridSize);
         Coord pos(ints);
-        //int counter = 0;
+        int counter = 0;
+        (void)counter;
         Enumerate(pos, gridSize, [&] {
             //std::cout << counter++ << ": " << px[0] << " " << px[1] << " " << px[2] << std::endl;
             order.push_back(px);
@@ -180,46 +196,143 @@ private:
         });
     }
 
-    void InitOptimalCandidates(Grid<std::vector<FixedPieces>>& candidatesPerPiece, Coords& order) const {
+    void InitLeastCandidates(CandidatesGrid& candidatesPerPiece, Coords& order) const {
         const Pieces& p = board->GetPieces();
-        int fixedPiece = GetFixedPiece(p);
+        const int fixedPiece = GetFixedPiece(p);
 
         Grid<> tempGrid(gridSize);
         Coord pos(Ints(gridSize.size()));
         int counter = 0;
+        (void)counter;
         Enumerate(pos, gridSize, [&] {
-            Coord px = GetOptimalCoord(tempGrid, fixedPiece);
+            Coord px = GetLeastCoord(tempGrid, fixedPiece);
             order.push_back(px);
-            std::cout << counter++ << ": " << px[0] << " " << px[1] << " " << px[2] << std::endl;
+            //std::cout << counter++ << ": " << px[0] << " " << px[1] << " " << px[2] << std::endl;
             AddCandidates(candidatesPerPiece, tempGrid, px, fixedPiece);
             return true;
         });
     }
 
-    void Evaluate(Grid<std::vector<FixedPieces>>& candidatesPerPiece) const {
+    void InitOptimalCandidates(CandidatesGrid& candidatesPerPiece, Coords& order) const {
+        const Pieces& p = board->GetPieces();
+        int fixedPiece = GetFixedPiece(p);
+
+        Grid<> tempGrid(gridSize);
+        int gridDim = (int)gridSize.size();
+        Ints ints(gridDim);
+        Coord px(ints);
+
+        int counter = 0;
+        (void)counter;
+
+        std::function<void()> push_pos = [&] {
+            order.push_back(px);
+            std::cout << counter++ << ": " << px[0] << " " << px[1] << " " << px[2] << std::endl;
+            AddCandidates(candidatesPerPiece, tempGrid, px, fixedPiece);
+        };
+
+        //std::function<int(int,int)> trans = [=] (a, b) { return b - a; };
+        std::function<int(int,int)> trans = [=] (int a, int b) { (void)b; return a; };
+
+        const int gs = gridSize[0]; // square :(
+        for (int i = 0; i < gs; i++) {
+            for (int j = 0; j < gridDim; j++) {
+                px[j] = i;
+            }
+
+            push_pos();
+
+            for (int j = 0; j < gridDim; j++) {
+                // extend dim j
+                for (int k = i + 1; k < gs; k++) {
+                    //px[j] = k;
+                    px[j] = trans(k, gs + i);
+                    push_pos();
+                }
+                px[j] = i;
+                // faces, k=x, j=y
+                for (int k = 0; k < j; k++) {
+                    for (int y = i + 1; y < gs; y++) {
+                        px[j] = trans(y, gs + i);
+                        for (int x = i + 1; x < gs; x++) {
+                            px[k] = trans(x, gs + i);
+                            push_pos();
+                        }
+                    }
+                    px[j] = i;
+                    px[k] = i;
+                }
+            }
+
+        }
+    }
+
+    void ReorderPieces(std::vector<FixedPieces>& ordered, const std::vector<FixedPieces>& pieces, const Ints& maskMap) {
+        ordered.resize(pieces.size());
+        int count = 0;
+        for (const auto& ps : pieces) {
+            for (const auto& p : ps) {
+                ordered[count].push_back(FixedPiece(p.coords, p.color, gridSize, maskMap));
+            }
+            count++;
+        }
+    }
+
+    void DoReorder(CandidatesGrid& candidatesPerPiece, const CandidatesGrid& candidates, const Coords& order) {
+        Coord pos(Ints(gridSize.size()));
+        int counter = 0;
+        Ints maskMap(64);
+        Enumerate(pos, gridSize, [&] {
+            const Coord& c = order[counter];
+            int j = c.GetIndex1D(gridSize);
+            int i = counter;
+            maskMap[j] = i;
+            counter++;
+            return true;
+        });
+
+        pos = Coord(Ints(gridSize.size()));
+        counter = 0;
+        Enumerate(pos, gridSize, [&] {
+            const Coord& j = pos;
+            const Coord& i = order[counter];
+            ReorderPieces(candidatesPerPiece[j], candidates[i], maskMap);
+            counter++;
+            return true;
+        });
+    }
+
+    void Evaluate(const CandidatesGrid& candidatesPerPiece) const {
         Coord pos = Coord(Ints(gridSize.size()));
         int max = 0;
         int count = 0;
         int sum = 0;
-        double squareSum = 0;
+        Ints hist;
         Enumerate(pos, gridSize, [&] {
             int n = 0;
-            for (size_t i = 0; i < candidatesPerPiece[pos].size(); i++)
-                n += candidatesPerPiece[pos][i].size();
+            for (size_t i = 0; i < candidatesPerPiece[pos].size(); i++) {
+                size_t c = candidatesPerPiece[pos][i].size();
+                n += (int)c;
+                if (hist.size() <= c)
+                    hist.resize(c + 1);
+                hist[c]++;
+            }
             if (n > max)
                 max = n;
             count++;
             sum += n;
-            squareSum += n * n;
 
-            std::cout << n << " ";
-            if (count % 16 == 0)
-                std::cout << std::endl;
+//            std::cout << n << " ";
+//            if (count % 16 == 0)
+//                std::cout << std::endl;
             return true;
         });
         double mean = sum / (double)count;
-        std::cout << "Candidates count " << sum << ", mean " << (int)mean
-                  << ", squareSum " << squareSum << std::endl;
+        std::cout << "Candidates count " << sum << ", mean " << (int)mean << ", hist:";
+        for (size_t i = 0; i < hist.size(); i++) {
+            std::cout << (i % 5 ? " " : "_") << hist[i];
+        }
+        std::cout << std::endl;
     }
 
     std::shared_ptr<const Board> board;

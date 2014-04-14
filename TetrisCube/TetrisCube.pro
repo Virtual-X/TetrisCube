@@ -7,10 +7,19 @@
 QT       -= core gui
 
 TARGET = TetrisCube
-TEMPLATE = lib
-CONFIG += staticlib
+TEMPLATE = app
+#TEMPLATE = lib
+#CONFIG += staticlib
+
+#CONFIG -= x86_64 ppc64
+#CONFIG += x86 ppc
 
 CONFIG += c++11
+
+QMAKE_CXXFLAGS_RELEASE -= -O2
+QMAKE_CXXFLAGS_RELEASE += -O3
+
+QMAKE_CXXFLAGS += -march=native -mtune=native
 
 INCLUDEPATH +=
 
@@ -36,7 +45,12 @@ HEADERS += \
     Solver.h \
     CandidatesCalculator.h \
     CudaSolver.h \
-    cuda_cpu.h
+    cuda_cpu.h \
+    SolverT.h \
+    Stats.h \
+    Main.h \
+    Timer.h \
+    BoardLoader.h
 unix:!symbian {
     maemo5 {
         target.path = /opt/usr/lib
@@ -45,3 +59,7 @@ unix:!symbian {
     }
     INSTALLS += target
 }
+
+SOURCES += \
+    Main.cpp \
+    BoardLoader.cpp

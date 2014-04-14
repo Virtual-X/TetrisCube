@@ -46,7 +46,8 @@ public:
         });
 
         for (const auto& c : candidatesData) {
-            candidates.push_back(c.bitset.to_ullong());
+            //candidates.push_back(c.bitset.to_ullong());
+            candidates.push_back(c.bitset);
         }
     }
 
@@ -60,11 +61,13 @@ public:
     void Solve_GPU(int splitLevel, int solutionsPerSolver) {
         SingleSolver s = PrepareSingleSolver(splitLevel, solutionsPerSolver);
 
-        std::vector<std::shared_ptr<SingleSolver> > ss = s.Split(splitLevel);
-//        SolveGPU(raw(candidates), raw(candidateOffsets), raw(solversStatus), raw(solutions_), splitLevel, solutionsPerSolver, ss.size());
+        auto ss = s.Split(splitLevel); // modify solversStatus
 
-        for (auto& sx : ss)
-            sx->ExtractSolutions(solutions);
+        int n = SolveGPU(raw(candidates), raw(candidateOffsets), raw(solversStatus), 0, splitLevel, solutionsPerSolver, ss.size());
+        std::vector<solution> sols(n);
+        SolveGPU(raw(candidates), raw(candidateOffsets), raw(solversStatus), raw(sols), splitLevel, solutionsPerSolver, ss.size());
+
+        s.ExtractSolutions(sols, solutions);
 
         std::cout << std::endl << "CUDA GPU finished. Solutions: " << solutions.size() << std::endl;
     }
@@ -79,14 +82,12 @@ private:
                 const uint64_t* candidates,
                 const int* candidateOffsets,
                 std::vector<solverStatus>& solversStatus,
-                std::vector<solution>& solutions_,
                 int minPiece,
                 int maxSolutions)
             : candidatesData(candidatesData),
               candidates(candidates),
               candidateOffsets(candidateOffsets),
               solversStatus(solversStatus),
-              solutions_(solutions_),
               minPiece(minPiece),
               maxSolutions(maxSolutions),
               solverIndex(0) {
@@ -109,27 +110,21 @@ private:
         }
 
         void Solve() {
-//            SolveCPU(candidates,
-//                     candidateOffsets,
-//                     raw(solversStatus),
-//                     raw(solutions_),
-//                     minPiece,
-//                     maxSolutions,
-//                     solverIndex);
+            int n = SolveCPU(candidates, candidateOffsets, raw(solversStatus) + solverIndex, 0, minPiece, maxSolutions);
+            std::vector<solution> sols(n);
+            SolveCPU(candidates, candidateOffsets, raw(solversStatus) + solverIndex, raw(sols), minPiece, maxSolutions);
 
-            ExtractSolutions(solutions);
+            ExtractSolutions(sols, solutions);
         }
 
-        void ExtractSolutions(std::list<Solution>& solutions__) const {
-//            const auto& ss = solutions_[solverIndex];
-//            for (int i = 0; i < ss.solutionsCount; i++) {
-//                const auto& s = ss.solutions[i];
-//                FixedPieces fp;
-//                for (int j = 0; j < piecesCount; j++) {
-//                    fp.push_back(candidatesData[s.candidateIndex[j]]);
-//                }
-//                solutions__.push_back(Solution(fp));
-//            }
+        void ExtractSolutions(const std::vector<solution>& sols, std::list<Solution>& solutions) const {
+            for (const auto& s : sols) {
+                FixedPieces fp;
+                for (int j = 0; j < piecesCount; j++) {
+                    fp.push_back(candidatesData[s.candidateIndex[j]]);
+                }
+                solutions.push_back(Solution(fp));
+            }
         }
 
     private:
@@ -137,7 +132,6 @@ private:
         const uint64_t* candidates;
         const int* candidateOffsets;
         std::vector<solverStatus>& solversStatus;
-        std::vector<solution>& solutions_;
         int minPiece;
         int maxSolutions;
         int solverIndex;
@@ -152,7 +146,7 @@ private:
 
         std::cout << std::endl << std::endl;
 
-        throw 0; //return SingleSolver(candidatesData, cs, cos, solversStatus, solutions, splitLevel, solutionsPerSolver);
+        return SingleSolver(candidatesData, cs, cos, solversStatus, splitLevel, solutionsPerSolver);
     }
 
     static void Solve(SingleSolver& solver, int threadId, int solverId) {
@@ -184,9 +178,6 @@ private:
     std::vector<uint64_t> candidates;
     std::vector<int> candidateOffsets;
     std::vector<solverStatus> solversStatus;
-    std::vector<solution> solutions_;
-    int minPiece;
-    int solverIndex;
 };
 
 #endif // CUDASOLVER_H

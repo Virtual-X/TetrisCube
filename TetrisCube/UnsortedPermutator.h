@@ -10,6 +10,7 @@ public:
         : indices(count),
           objects(count) {
         for (int i = 0; i < count; i++) {
+            Reset(i);
             objects[i] = i;
         }
     }
@@ -26,8 +27,17 @@ public:
         return TakeCandidate(position, indices[position] + 1 + nextCandidateNumber);
     }
 
-    void Swap(int position, int candidateNumber) {
-        indices[position] = candidateNumber;
+    void Take(int position, int other) {
+        const int i = indices[position];
+        const int u = objects[i];
+        objects[i] = objects[position];
+        objects[position] = objects[other];
+        objects[other] = u;
+        indices[position] = other;
+    }
+
+    void Swap(int position, int other) {
+        indices[position] = other;
         Swap(position);
     }
 
@@ -36,7 +46,7 @@ public:
     }
 
     void Reset(int position) {
-        indices[position] = 0;
+        indices[position] = position;
     }
 
     //IEnumerable<int> GetNextCandidates(int position) {
@@ -54,8 +64,8 @@ public:
 private:
     bool TakeCandidate(int position, int candidateNumber) {
         Swap(position);
-        if (candidateNumber >= GetMaxIndex(position)) {
-            indices[position] = 0;
+        if (candidateNumber >= (int)indices.size()) {
+            indices[position] = position;
             return false;
         }
 
@@ -64,16 +74,13 @@ private:
         return true;
     }
 
-    int GetMaxIndex(int position) {
-        return indices.size() - position;
-    }
-
     void Swap(int position) {
-        if (indices[position] > 0)
-            SwapObjects(position, position + indices[position]);
+        SwapObjects(position, indices[position]);
     }
 
     void SwapObjects(int i, int j) {
+//        if (i == j)
+//            return;
         int t = objects[i];
         objects[i] = objects[j];
         objects[j] = t;

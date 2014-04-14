@@ -1,7 +1,10 @@
 #ifndef __SOLVER_H__
 #define __SOLVER_H__
 
+#include "SolverT.h"
+
 #include "Solution.h"
+
 #include "CandidatesCalculator.h"
 
 #include "UnsortedPermutator.h"
@@ -10,6 +13,14 @@
 #include <functional>
 #include <bitset>
 #include <iostream>
+#include <atomic>
+#include <sstream>
+
+#define BIT_GRID
+#define USE_AVX
+
+#include <immintrin.h>
+
 
 class Solver {
 private:
@@ -22,8 +33,11 @@ public:
     double progress;
 
 private:
+#ifdef BIT_GRID
     BitGrid grid;
-    //Grid<> grid;
+#else
+    Grid<> grid;
+#endif
     UnsortedPermutator permutator;
 
     int actualPiece;
@@ -34,31 +48,67 @@ private:
     std::shared_ptr<std::vector<std::vector<FixedPieces>>> candidatesPerPieceData;
     const std::vector<std::vector<FixedPieces>>& candidatesPerPiece;
     const std::vector<FixedPieces>* actualCandidates;
-    std::shared_ptr<Ints> positionsOrderData;
 
-    struct Dummy {
-        inline int operator[] (int index) const {
-            return index;
-        }
-    } positionsOrder;
-
-//    const Ints& positionsOrder;
+    enum {
+        PiecesCount = 12,
+        MaxRotations = 24,
+        MaxCandidatesPerPos = 200,
+    };
 
     Ints currentCandidatesIndex;
+    Ints validCandidatesIndex;
 
-    int tries = 0;
-    double avg = 0;
-    int pass = 0;
-    int failBorder = 0;
-    int failContent = 0;
-    int failHole = 0;
-    int failSemiHole = 0;
+    struct cd {
+        int piece;
+        int rotation;
+    };
+
+    cd validCandidates[PiecesCount][MaxCandidatesPerPos];
+    int validCandidatesRotationCount[PiecesCount];
+
+    int minPieceSize;
+
+    std::shared_ptr<Stats> stats;
+
+    struct CandidatesT {
+        int candidatesOffsets[PositionsCount][PiecesCount + 1];
+        CandidatesMask candidatesMask;
+        std::vector<const FixedPiece*> candidatesPointers;
+
+        CandidatesT(const std::vector<std::vector<FixedPieces>>& candidatesPerPiece) {
+            for (int j = 0; j < PositionsCount; j++) {
+                candidatesOffsets[j][0] = (int)candidatesMaskBuffer.size();
+                for (int i = 0; i < PiecesCount; i++) {
+                    const FixedPieces& candidates = candidatesPerPiece[j][i];
+                    for (const auto& c : candidates) {
+                        candidatesMaskBuffer.push_back(c.bitset);
+                        candidatesPointers.push_back(&c);
+                    }
+                    candidatesOffsets[j][i + 1] = (int)candidatesMaskBuffer.size();
+                }
+            }
+
+            candidatesMask = &candidatesMaskBuffer[0];
+        }
+
+    private:
+        std::vector<uint64_t> candidatesMaskBuffer;
+    };
+
+    std::shared_ptr<const CandidatesT> candidatesT;
 
 public:
 
-    std::string GetText(double elapsedSeconds) {
-        std::string s = actualPiece < 0 && elapsedSeconds > 0 ? "Finished - " : "";
-        return s;
+    void ResetStats() {
+        stats.reset(new Stats());
+    }
+
+    void MergeStats(const Solver& other) {
+        stats->Merge(*other.stats);
+    }
+
+    void PrintStats() {
+        stats->Print();
         /*
         for (int i = 0; i < piecesCount; i++) {
             s += String.Format("{0,2}.{1:D2} ", permutator.GetIndex(i), currentCandidatesIndex[i] + 1);
@@ -78,24 +128,26 @@ public:
           gridSize(board->GetSize()),
           solutions(),
           progress(0),
+#ifdef BIT_GRID
           grid(Ints{prod(gridSize)}),
+#else
+          grid(gridSize),
+#endif
           permutator(piecesCount),
           actualPiece(0),
           situation(piecesCount),
           candidatesPerPieceData(std::make_shared<std::vector<std::vector<FixedPieces>>>(0)),
           candidatesPerPiece(*candidatesPerPieceData),
-          positionsOrderData(std::make_shared<Ints>(0)),
-          //positionsOrder(*positionsOrderData),
-          currentCandidatesIndex(piecesCount)
+          currentCandidatesIndex(piecesCount),
+          validCandidatesIndex(piecesCount),
+          minPieceSize(0),
+          stats(new Stats())
     {
-        auto c = CandidatesCalculator(board).GetCandidates();
-        for (int i = 0; i < prod(gridSize); i++)
-            positionsOrderData->push_back(i);
-
-//        Coords order;
-//        auto c = CandidatesCalculator(board).GetSnakeCandidates(order);
-//        for (const auto& o : order)
-//            positionsOrderData->push_back(o.GetIndex1D(gridSize));
+        Coords order;
+        auto d = CandidatesCalculator(board).GetSnakeCandidates(order);
+        //auto d = CandidatesCalculator(board).GetOptimalCandidates(order);
+        auto c = CandidatesCalculator(board).Reorder(d, order);
+//        auto c = CandidatesCalculator(board).GetCandidates();
 
         Coord pos(Ints(gridSize.size()));
         Enumerate(pos, gridSize, [&] {
@@ -103,10 +155,21 @@ public:
             return true;
         });
 
+        candidatesT = std::make_shared<CandidatesT>(candidatesPerPiece);
+
         for (int i = 0; i < piecesCount; i++) {
             currentCandidatesIndex[i] = -1;
+            validCandidatesIndex[i] = -1;
             position.push_back(0);
         }
+
+        for (const auto& p : board->GetPieces()) {
+            int n = p.GetOrientationCoords(0).size();
+            if (n < minPieceSize)
+                minPieceSize = n;
+        }
+
+        CalculateValidCandidates();
     }
 
 public:
@@ -141,11 +204,51 @@ public:
             IncreaseActualPiece();
             if (actualPiece == piecesCount) {
                 AddSolution();
+#ifdef MAX_SOLUTIONS_T
+            if (solutions.size() >= MAX_SOLUTIONS_T)
+                return -1;
+#endif
                 DecreaseActualPiece();
             }
         }
 
         return actualPiece;
+    }
+
+    void Solve() {
+        CandidatesOffsets candidatesOffsets = candidatesT->candidatesOffsets;
+
+        int permutationOrder[PiecesCount];
+        for (int i = 0; i < PiecesCount; i++) {
+            permutationOrder[i] = permutator[i];
+        }
+
+        SituationT currentSituation;
+        for (int i = 0; i < PiecesCount; i++) {
+            const int off = candidatesOffsets[this->position[i]][permutator[i]];
+            currentSituation.pieces[i] = off + currentCandidatesIndex[i];
+        }
+
+        std::list<SituationT> solutions;
+        int minPiece = actualPiece;
+        uint64_t grid = this->grid.GetBits();
+        int position = this->position[actualPiece];
+
+        try {
+            SolverT::Solve(candidatesOffsets, candidatesT->candidatesMask, permutationOrder,
+                           currentSituation, solutions, minPiece, grid, position, *stats);
+        }
+        catch (int) {
+        }
+
+        for (const auto& s : solutions) {
+            FixedPieces p;
+            p.reserve(PiecesCount);
+            for (int i = 0; i < PiecesCount; i++) {
+                p.push_back(*candidatesT->candidatesPointers[s.pieces[i]]);
+            }
+            this->solutions.push_back(Solution(p));
+        }
     }
 
     Solution GetCurrentSituation() const {
@@ -166,18 +269,25 @@ private:
         return n;
     }
 
+#ifdef OLD_ALL_AT_ONCE
+    void CalculateValidCandidates() {}
+
     bool Next() {
+        stats->Next();
+
         auto& index = currentCandidatesIndex[actualPiece];
         index++;
 
         const auto& candidatesPerPosition = GetCandidatesPerPosition(actualPiece);
         permutator.SwapBack(actualPiece);
-        int candidate = actualPiece + permutator.GetIndex(actualPiece);
+        int candidate = permutator.GetIndex(actualPiece);
         for (; candidate < piecesCount; candidate++) {
+            stats->PieceCandidate(actualPiece);
             const auto& candidates = candidatesPerPosition[permutator[candidate]];
             for (; index < (int)candidates.size(); index++) {
-                if (grid.IsValid(candidates[index])) {
-                    permutator.Swap(actualPiece, candidate - actualPiece);
+                stats->ConfigCandidate(actualPiece);
+                if (grid.IsValid(candidates[index])) { // && grid.LeavesSpace(candidates[index], minPieceSize)) {
+                    permutator.Swap(actualPiece, candidate);
                     return true;
                 }
             }
@@ -189,8 +299,92 @@ private:
         permutator.Reset(actualPiece);
         return false;
     }
+#else
+    void CalculateValidCandidatesNaive() {
+        const auto& candidatesPerPosition = GetCandidatesPerPosition(actualPiece);
+        int n = 0;
+        auto& vc = validCandidates[actualPiece];
+        for (int candidate = actualPiece; candidate < PiecesCount; candidate++) {
+            stats->PieceCandidate(actualPiece);
+            const auto& candidates = candidatesPerPosition[permutator[candidate]];
+            const int size = (int)candidates.size();
+            for (int index = 0; index < size; index++) {
+                stats->ConfigCandidate(actualPiece);
+                if (grid.IsValid(candidates[index])) {
+                    cd& cd = vc[n++];
+                    cd.piece = candidate;
+                    cd.rotation = index;
+                }
+            }
+        }
+        validCandidatesRotationCount[actualPiece] = n;
+    }
+
+    void CalculateValidCandidatesAvx() {
+        uint64_t g = grid.GetBits();
+        uint64_t b[] = { g, g, g, g };
+        __m256i mm_grid = _mm256_load_si256((const __m256i*)b);
+        uint64_t p[4];
+
+        const auto& candidatesPerPosition = GetCandidatesPerPosition(actualPiece);
+        int n = 0;
+        auto& vc = validCandidates[actualPiece];
+        for (int candidate = actualPiece; candidate < PiecesCount; candidate++) {
+            stats->PieceCandidate(actualPiece);
+            const auto& candidates = candidatesPerPosition[permutator[candidate]];
+            const int size = (int)candidates.size();
+            const int sizel = ((size + 3) / 4) * 4;
+            for (int index = 0; index < sizel; index++) {
+                stats->ConfigCandidate(actualPiece);
+                p[index % 4] = index < size ? candidates[index].bitset : (uint64_t)-1;
+                if (index % 4 == 3) {
+                    __m256i mm_pieces = _mm256_load_si256((__m256i*)p);
+                    __m256i mm_and = _mm256_and_si256(mm_pieces, mm_grid);
+                    _mm256_store_si256((__m256i*)p, mm_and);
+                    // _mm256_cmpgt_epi64
+                    for (int j = 0; j < 4; j++) {
+                        if (!p[j]) {
+                            cd& cd = vc[n++];
+                            cd.piece = candidate;
+                            cd.rotation = index - 3 + j;
+                        }
+                    }
+                }
+            }
+        }
+        validCandidatesRotationCount[actualPiece] = n;
+    }
+
+    void CalculateValidCandidates() {
+        CalculateValidCandidatesNaive();
+//        CalculateValidCandidatesTemplate();
+//        CalculateValidCandidatesAvx();
+    }
+
+
+    bool Next() {
+        stats->Next();
+
+        int index = ++validCandidatesIndex[actualPiece];
+
+        if (index >= validCandidatesRotationCount[actualPiece]) {
+            validCandidatesIndex[actualPiece] = -1;
+            permutator.SwapBack(actualPiece);
+            permutator.Reset(actualPiece);
+            return false;
+        }
+
+        const cd& cd = validCandidates[actualPiece][index];
+        permutator.Take(actualPiece, cd.piece);
+
+        currentCandidatesIndex[actualPiece] = cd.rotation;
+        return true;
+    }
+#endif
 
     bool _Next() {
+        stats->Next();
+
         do {
             auto& index = currentCandidatesIndex[actualPiece];
             index++;
@@ -207,6 +401,8 @@ private:
     }
 
     bool __Next() {
+        stats->Next();
+
         auto& index = currentCandidatesIndex[actualPiece];
         index++;
         const auto& candidates = GetActualCandidates();
@@ -221,6 +417,8 @@ private:
     }
 
     void DecreaseActualPiece() {
+        stats->Decrease();
+
         actualPiece--;
 
         if (actualPiece >= 0) {
@@ -229,15 +427,24 @@ private:
     }
 
     void IncreaseActualPiece() {
+        stats->Increase();
+
         grid.SetPiece(GetActualPiece(), true);
 
         actualPiece++;
 
         if (actualPiece < piecesCount) {
             int pos = position[actualPiece - 1] + 1;
-            while (grid[positionsOrder[pos]])
+#ifndef OPT
+            while (grid[pos]) {
                 pos++;
+                stats->PosPP();
+            }
+#else
+            pos = grid.GetNextValid(pos);
+#endif
             position[actualPiece] = pos;
+            CalculateValidCandidates();
         }
     }
 
@@ -258,7 +465,7 @@ private:
     }
 
     const std::vector<FixedPieces>& GetCandidatesPerPosition(int positionIndex) const {
-        return candidatesPerPiece[positionsOrder[position[positionIndex]]];
+        return candidatesPerPiece[position[positionIndex]];
     }
 
     void AddSolution() {

@@ -1,13 +1,9 @@
 #include "glw.h"
 
 #include "Scene.h"
-#include "Timer.h"
+#include "TetrisCube/Timer.h"
 
 #include "boardloader.h"
-
-#include "TetrisCube/Solver.h"
-#include "TetrisCube/ParallelSolver.h"
-#include "TetrisCube/CudaSolver.h"
 
 #include <QTimer>
 #include <QElapsedTimer>
@@ -16,6 +12,7 @@
 #include <GL/glew.h>
 
 #include <iostream>
+#include <mutex>
 
 static std::string GetProcessPath() {
     return "/home/igor/Development/qt-workspace/App/App";
@@ -36,22 +33,72 @@ GLW::~GLW()
     glDeleteTextures(2, textures);
 }
 
-static const int numThreads = 8;
+#define MAX_SOLUTIONS_T 1
+
+static const int numThreads = 4;
+
+#ifdef MAX_SOLUTIONS_T
 static const int splitLevel = 1;
-static const size_t solutionsPerSolver = 1;
+static const size_t solutionsPerSolver = MAX_SOLUTIONS_T;
+static const size_t solverPerDisplay = 1;
+#else
+static const int splitLevel = 3;
+static const size_t solutionsPerSolver = -1;
+static const size_t solverPerDisplay = splitLevel == 3 ? 500 : 5;
+#endif
+
 static const size_t solutionsPerDisplay = 100000;
 static const std::string boardName = "Tetris4.xml";
 
+
+#include "TetrisCube/Solver.h"
+#include "TetrisCube/ParallelSolver.h"
+#include "TetrisCube/CudaSolver.h"
+
+
+static Solver* mainSolver = 0;
+static std::mutex mutex;
+
+#define SOLVE_T
+
+#ifdef SOLVE_T
 static void Solve(Solver& solver, int threadId, int solverId) {
+    solver.ResetStats();
+    solver.Solve();
+
+    if (solverId % solverPerDisplay == 0)
+    std::cout << "FINISHED! [solver " << solverId << ", thread " << threadId <<
+                 ", solutions " << solver.solutions.size() << "]" << std::endl;
+//    for (const auto& ss : solver.solutions) {
+//        for (const auto& p : ss.GetPieces()) {
+//            std::cout << p.bitset << std::endl;
+//        }
+//    }
+
+    //    std::lock_guard<std::mutex> lock(mutex);
+//    (void)lock;
+//    mainSolver->MergeStats(solver);
+}
+#else
+static void Solve(Solver& solver, int threadId, int solverId) {
+    solver.ResetStats();
     Timer t;
     t.Start();
     size_t last = 0;
     while (solver.solutions.size() < solutionsPerSolver) {
-        for (int i = 0; i < 150; i++) {
+        for (int i = 0; i < 500; i++) {
             if (solver.DoStep() < splitLevel) {
                 //std::cout << "." << std::flush;
-                printf("FINISHED! [solver %i, thread %i, solutions %i]\n",
-                         solverId, threadId, (int)solver.solutions.size());
+//                printf("FINISHED! [solver %i, thread %i, solutions %i]\n",
+//                         solverId, threadId, (int)solver.solutions.size());
+
+                if (solverId % solverPerDisplay == 0)
+                std::cout << "FINISHED! [solver " << solverId << ", thread " << threadId <<
+                             ", solutions " << solver.solutions.size() << "]" << std::endl;
+
+//                std::lock_guard<std::mutex> lock(mutex);
+//                (void)lock;
+//                mainSolver->MergeStats(solver);
                 return;
             }
         }
@@ -66,12 +113,30 @@ static void Solve(Solver& solver, int threadId, int solverId) {
     while (solver.solutions.size() > solutionsPerSolver) {
         solver.solutions.pop_back();
     }
+
+    if (solverId % solverPerDisplay == 0)
+    std::cout << "FINISHED! [solver " << solverId << ", thread " << threadId <<
+                 ", solutions " << solver.solutions.size() << "]" << std::endl;
+//    for (const auto& ss : solver.solutions) {
+//        for (const auto& p : ss.GetPieces()) {
+//            std::cout << p.bitset << std::endl;
+//        }
+//    }
+
 //    printf("EXHAUSTED! [solver %i, thread %i, solutions %i]\n",
 //             solverId, threadId, (int)solver.solutions.size());
+
+//    std::lock_guard<std::mutex> lock(mutex);
+//    (void)lock;
+//    mainSolver->MergeStats(solver);
 }
+#endif
 
 void GLW::Init()
 {
+    (void)solutionsPerSolver;
+    (void)solutionsPerDisplay;
+
     BoardLoader bl;
     auto filename = ResourcePath(boardName);
     auto b = bl.Load(filename.c_str());
@@ -79,7 +144,7 @@ void GLW::Init()
     Timer cudatime;
     cudatime.Start();
 
-    CudaSolver cs(b);
+    //CudaSolver cs(b);
     //cs.Solve_CPU(splitLevel, solutionsPerSolver, numThreads);
     //cs.Solve_GPU(splitLevel, solutionsPerSolver);
 
@@ -91,6 +156,7 @@ void GLW::Init()
     Timer t;
     t.Start();
     Solver solver(b);
+    mainSolver = &solver;
     t.Lap("init");
 
     t.Start();
@@ -109,10 +175,13 @@ void GLW::Init()
     printf("\n");
     fflush(0);
 
-    printf("\nTotal solutions found by cuda: %i\n", (int)cs.solutions.size());
+    //printf("\nTotal solutions found by cuda: %i\n", (int)cs.solutions.size());
+
+    mainSolver->PrintStats();
 
     scene.reset(new Scene());
-    scene->SetSolution(!cs.solutions.empty() ? cs.solutions.front() : solver.solutions.front());
+    scene->SetSolution(solver.solutions.front());
+    //scene->SetSolution(!cs.solutions.empty() ? cs.solutions.front() : solver.solutions.front());
 }
 
 GLuint GLW::LoadTexture(const char* name)

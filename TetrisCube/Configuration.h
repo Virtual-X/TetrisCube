@@ -6,7 +6,8 @@
 class Configuration;
 typedef std::vector<Configuration> Configurations;
 
-struct Configuration {
+class Configuration {
+public:
     int PieceIndex;
     int Orientation;
     Coord Offset;

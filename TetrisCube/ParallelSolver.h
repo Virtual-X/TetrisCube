@@ -22,30 +22,22 @@ public:
 
         std::mutex mutex;
         size_t worked = 0;
-
-        size_t solutionsCount = 0;
+        const size_t solversCount = solvers.size();
 
         int i = 0;
         for (auto& t : threads) {
-            t = std::thread([=, &mutex, &worked, &solutionsCount] {
+            t = std::thread([=, &mutex, &worked] {
                 while (true) {
                     size_t job = 0;
                     {
                         std::lock_guard<std::mutex> lock(mutex);
                         (void)lock;
-                        if (worked >= solvers.size())
+                        if (worked >= solversCount)
                             return;
-//                        if (solutionsCount > 5000)
-//                            return;
                         job = worked;
                         worked++;
                     }
                     function(*solvers[job], i, job);
-                    {
-                        std::lock_guard<std::mutex> lock(mutex);
-                        (void)lock;
-                        solutionsCount += solvers[job]->solutions.size();
-                    }
                 }
             });
             i++;

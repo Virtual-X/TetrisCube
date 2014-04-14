@@ -5,17 +5,24 @@
 #include "PieceColor.h"
 
 #include <bitset>
-typedef std::bitset<64> bitset64;
-//typedef uint64_t bitset64;
+//typedef std::bitset<64> bitset64;
+typedef uint64_t bitset64;
 
 class FixedPiece;
 typedef std::vector<FixedPiece> FixedPieces;
 
-struct FixedPiece {
+class FixedPiece {
+public:
     FixedPiece(const Coords& coords, const PieceColor& color, const Ints& gridSize)
         : coords(coords),
           color(color),
           bitset(GetBitSet(coords, gridSize)) {
+    }
+
+    FixedPiece(const Coords& coords, const PieceColor& color, const Ints& gridSize, const Ints& maskMap)
+        : coords(coords),
+          color(color),
+          bitset(GetBitSet(coords, gridSize, maskMap)) {
     }
 
     const Coords coords;
@@ -25,16 +32,24 @@ struct FixedPiece {
 private:
 
     static bitset64 GetBitSet(const Coords& coords, const Ints& gridSize) {
+        Ints maskMap(64);
+        for (size_t i = 0; i < maskMap.size(); i++) {
+            maskMap[i] = i;
+        }
+        return GetBitSet(coords, gridSize, maskMap);
+    }
+
+    static bitset64 GetBitSet(const Coords& coords, const Ints& gridSize, const Ints& maskMap) {
         bitset64 mask = 0;
         for (size_t i = 0; i < coords.size(); i++) {
             const Coord& c = coords[i];
             int bit = c.GetIndex1D(gridSize);
-            //mask |= (1LL << bit);
-            mask[bit] = 1;
+            int maskBit = maskMap[bit];
+            mask |= (1LL << maskBit);
+            //mask[maskBit] = 1;
         }
         return mask;
     }
-
 
 };
 
