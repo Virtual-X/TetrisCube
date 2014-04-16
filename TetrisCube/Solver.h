@@ -71,20 +71,24 @@ private:
     std::shared_ptr<Stats> stats;
 
     struct CandidatesT {
-        int candidatesOffsets[PositionsCount][PiecesCount + 1];
+        int candidatesOffsets[PositionsCount][CodesCount][PiecesCount + 1];
         CandidatesMask candidatesMask;
         std::vector<const FixedPiece*> candidatesPointers;
 
         CandidatesT(const std::vector<std::vector<FixedPieces>>& candidatesPerPiece) {
             for (int j = 0; j < PositionsCount; j++) {
-                candidatesOffsets[j][0] = (int)candidatesMaskBuffer.size();
-                for (int i = 0; i < PiecesCount; i++) {
-                    const FixedPieces& candidates = candidatesPerPiece[j][i];
-                    for (const auto& c : candidates) {
-                        candidatesMaskBuffer.push_back(c.bitset);
-                        candidatesPointers.push_back(&c);
+                for (int k = 0; k < CodesCount; k++) {
+                    candidatesOffsets[j][k][0] = (int)candidatesMaskBuffer.size();
+                    for (int i = 0; i < PiecesCount; i++) {
+                        const FixedPieces& candidates = candidatesPerPiece[j][i];
+                        for (const auto& c : candidates) {
+                            if (Coder::IsCompatible(c.bitset, j, k)) {
+                                candidatesMaskBuffer.push_back(c.bitset);
+                                candidatesPointers.push_back(&c);
+                            }
+                        }
+                        candidatesOffsets[j][k][i + 1] = (int)candidatesMaskBuffer.size();
                     }
-                    candidatesOffsets[j][i + 1] = (int)candidatesMaskBuffer.size();
                 }
             }
 
@@ -143,11 +147,11 @@ public:
           minPieceSize(0),
           stats(new Stats())
     {
-        Coords order;
-        auto d = CandidatesCalculator(board).GetSnakeCandidates(order);
+        //Coords order;
+        //auto d = CandidatesCalculator(board).GetSnakeCandidates(order);
         //auto d = CandidatesCalculator(board).GetOptimalCandidates(order);
-        auto c = CandidatesCalculator(board).Reorder(d, order);
-//        auto c = CandidatesCalculator(board).GetCandidates();
+        //auto c = CandidatesCalculator(board).Reorder(d, order);
+        auto c = CandidatesCalculator(board).GetCandidates();
 
         Coord pos(Ints(gridSize.size()));
         Enumerate(pos, gridSize, [&] {
@@ -225,7 +229,7 @@ public:
 
         SituationT currentSituation;
         for (int i = 0; i < PiecesCount; i++) {
-            const int off = candidatesOffsets[this->position[i]][permutator[i]];
+            const int off = candidatesOffsets[this->position[i]][0][permutator[i]];
             currentSituation.pieces[i] = off + currentCandidatesIndex[i];
         }
 

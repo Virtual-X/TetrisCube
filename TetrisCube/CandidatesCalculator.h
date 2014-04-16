@@ -227,7 +227,7 @@ private:
 
         std::function<void()> push_pos = [&] {
             order.push_back(px);
-            std::cout << counter++ << ": " << px[0] << " " << px[1] << " " << px[2] << std::endl;
+            //std::cout << counter++ << ": " << px[0] << " " << px[1] << " " << px[2] << std::endl;
             AddCandidates(candidatesPerPiece, tempGrid, px, fixedPiece);
         };
 
@@ -307,15 +307,17 @@ private:
         int max = 0;
         int count = 0;
         int sum = 0;
+        int sumHist = 0;
         Ints hist;
         Enumerate(pos, gridSize, [&] {
             int n = 0;
             for (size_t i = 0; i < candidatesPerPiece[pos].size(); i++) {
                 size_t c = candidatesPerPiece[pos][i].size();
-                n += (int)c;
+                n += (int)c;                
                 if (hist.size() <= c)
                     hist.resize(c + 1);
                 hist[c]++;
+                sumHist++;
             }
             if (n > max)
                 max = n;
@@ -330,9 +332,9 @@ private:
         double mean = sum / (double)count;
         std::cout << "Candidates count " << sum << ", mean " << (int)mean << ", hist:";
         for (size_t i = 0; i < hist.size(); i++) {
-            std::cout << (i % 5 ? " " : "_") << hist[i];
+            std::cout << (i % 5 ? " " : "'") << hist[i];
         }
-        std::cout << std::endl;
+        std::cout << ", sum hist " << sumHist << std::endl;
     }
 
     std::shared_ptr<const Board> board;

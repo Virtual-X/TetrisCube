@@ -2,6 +2,7 @@
 #define SOLVERT_H
 
 #include "Stats.h"
+#include "Coder.h"
 
 #include <list>
 
@@ -56,7 +57,8 @@ private:
     int nextValid[256];
 };
 
-typedef const int (&CandidatesOffsets)[PositionsCount][PiecesCount + 1];
+typedef const int (&CandidatesOffsets)[PositionsCount][CodesCount][PiecesCount + 1];
+//typedef const int (&CandidatesOffsets)[PositionsCount][PiecesCount + 1];
 typedef const uint64_t* CandidatesMask;
 
 typedef void (*AddValidCandidatesFunc)(uint64_t , int, int, int, int*, int*, int&, CandidatesMask);
@@ -123,9 +125,9 @@ public:
     static void AddNoCandies(uint64_t , int, int, int, int*, int*, int&, CandidatesMask) {
     }
 
-    static void AddValidCandies(uint64_t grid, int candidate, int begin, int end, int* validCandidates, int* validIndices, int& validsCount, CandidatesMask candidatesMask) {
+    void AddValidCandies(uint64_t grid, int candidate, int begin, int end, int* validCandidates, int* validIndices, int& validsCount, CandidatesMask candidatesMask) {
         for (int index = begin; index < end; index++) {
-            //stats.ConfigCandidate(ActualPiece);
+            stats.ConfigCandidate(ActualPiece);
             if (!(candidatesMask[index] & grid)) {
                 validCandidates[validsCount] = candidate;
                 validIndices[validsCount] = index;
@@ -135,18 +137,19 @@ public:
     }
 
     void Solve(const uint64_t grid, const int position) {
-        //stats.Next();
+        stats.Next();
 
-        const int pos = MaskBit::GetNextValid(grid, position);
         const int current = permutationOrder[ActualPiece];
+        const int pos = MaskBit::GetNextValid(grid, position);
+        const int code = Coder::GetCode(grid, pos);
 
         int begins[PiecesLeft];
         int ends[PiecesLeft];
         //int indices[PiecesLeft];
 
-        const int (&candidatesOffsets_)[PiecesCount + 1] = candidatesOffsets[pos];
+        const int (&candidatesOffsets_)[PiecesCount + 1] = candidatesOffsets[pos][code];
         for (int candidate = 0; candidate < PiecesLeft; candidate++) {
-            //stats.PieceCandidate(ActualPiece);
+            stats.PieceCandidate(ActualPiece);
             const int piece = permutationOrder[ActualPiece + candidate];
             //indices[candidate] = position * PiecesCount + piece;
             begins[candidate] = candidatesOffsets_[piece];
@@ -158,7 +161,7 @@ public:
         int validIndices[MaxCandidatesPerPosition];
 
         for (int candidate = 0; candidate < PiecesLeft; candidate++) {
-//            addValidCandidates[indices[candidate]](grid, ActualPiece + candidate, begins[candidate], ends[candidate], validCandidates, validIndices, validsCount, candidatesMask);
+            //addValidCandidates[indices[candidate]](grid, ActualPiece + candidate, begins[candidate], ends[candidate], validCandidates, validIndices, validsCount, candidatesMask);
             AddValidCandies(grid, ActualPiece + candidate, begins[candidate], ends[candidate], validCandidates, validIndices, validsCount, candidatesMask);
         }
 
@@ -268,12 +271,12 @@ public:
                       Stats& stats)
     {
         AddValidCandidatesFunc addValidCandidates[PiecesTimesPosition];
-        for (int i = 0; i < PiecesTimesPosition; i++) {
-            const int pos = i / PiecesCount;
-            const int piece = i % PiecesCount;
-            addValidCandidates[i] = candidatesOffsets[pos][piece] < candidatesOffsets[pos][piece + 1] ?
-                        &SolverT_T<0>::AddValidCandies : &SolverT_T<0>::AddNoCandies;
-        };
+//        for (int i = 0; i < PiecesTimesPosition; i++) {
+//            const int pos = i / PiecesCount;
+//            const int piece = i % PiecesCount;
+//            addValidCandidates[i] = candidatesOffsets[pos][piece] < candidatesOffsets[pos][piece + 1] ?
+//                        &SolverT_T<0>::AddValidCandies : &SolverT_T<0>::AddNoCandies;
+//        };
         SolverT_T<0>::SolveX(candidatesOffsets, candidatesMask, addValidCandidates, permutationOrder,
                              currentSituation, solutions, minPiece, grid, position, stats);
     }

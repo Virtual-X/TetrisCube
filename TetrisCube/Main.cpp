@@ -4,17 +4,17 @@
 #include "BoardLoader.h"
 
 #define STATS_
-//#define MAX_SOLUTIONS_T 3
+//#define MAX_SOLUTIONS_T 8
 #define TEMPLATE_T
 
 static const int numThreads = 16;
 
 #ifdef MAX_SOLUTIONS_T
 static const int splitLevel = 1;
-static const int maxSolvers = 25;
+static const int maxSolvers = 12;
 static const size_t solverPerDisplay = 1;
 #else
-static const int splitLevel = 3;
+static const int splitLevel = 2;
 static const int maxSolvers = 0;
 static const size_t solverPerDisplay = splitLevel == 3 ? 500 : 5;
 #endif
@@ -43,7 +43,7 @@ void MergeStats(const Solver& solver) {
 
 int numSolvers = 1;
 static void Solve(Solver& solver, int threadId, int solverId) {
-    if (maxSolvers && solverId % (numSolvers < maxSolvers ? 1 : (numSolvers + maxSolvers - 1) / maxSolvers))
+    if (maxSolvers && solverId % (numSolvers < maxSolvers ? 1 : (numSolvers + maxSolvers - 1) / (maxSolvers ? maxSolvers : 1)))
         return;
 
     solver.ResetStats();

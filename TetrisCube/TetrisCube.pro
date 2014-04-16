@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       -= core gui
+QT       -= core gui widgets opengl
 
 TARGET = TetrisCube
 TEMPLATE = app
@@ -23,7 +23,7 @@ QMAKE_CXXFLAGS += -march=native -mtune=native
 
 INCLUDEPATH +=
 
-LIBS +=
+LIBS += -Wl,--no-as-needed
 
 OTHER_FILES += \
     ../../../cuda-workspace/cuda_tetriscube/src/cuda_tc.h \
@@ -50,7 +50,8 @@ HEADERS += \
     Stats.h \
     Main.h \
     Timer.h \
-    BoardLoader.h
+    BoardLoader.h \
+    Coder.h
 unix:!symbian {
     maemo5 {
         target.path = /opt/usr/lib
