@@ -125,15 +125,29 @@ public:
     static void AddNoCandies(uint64_t , int, int, int, int*, int*, int&, CandidatesMask) {
     }
 
-    void AddValidCandies(uint64_t grid, int candidate, int begin, int end, int* validCandidates, int* validIndices, int& validsCount, CandidatesMask candidatesMask) {
+    template<int Offset>
+    void GetBeginEnd(int* begins, int* ends, const int (&candidatesOffsets_)[PiecesCount + 1]) const {
+        stats.PieceCandidate(Offset);
+        const int piece = permutationOrder[ActualPiece];
+        begins[ActualPiece - Offset] = candidatesOffsets_[piece];
+        ends[ActualPiece - Offset] = candidatesOffsets_[piece + 1];
+        nextSolver.template GetBeginEnd<Offset>(begins, ends, candidatesOffsets_);
+    }
+
+    template<int Offset>
+    void AddValidCands(uint64_t grid, const int* begins, const int* ends, int* validCandidates, int* validIndices, int& validsCount) const {
+        const int begin = begins[ActualPiece - Offset];
+        const int end = ends[ActualPiece - Offset];
         for (int index = begin; index < end; index++) {
-            stats.ConfigCandidate(ActualPiece);
+            stats.ConfigCandidate(Offset);
             if (!(candidatesMask[index] & grid)) {
-                validCandidates[validsCount] = candidate;
+                validCandidates[validsCount] = ActualPiece;
                 validIndices[validsCount] = index;
                 ++validsCount;
             }
         }
+
+        nextSolver.template AddValidCands<Offset>(grid, begins, ends, validCandidates, validIndices, validsCount);
     }
 
     void Solve(const uint64_t grid, const int position) {
@@ -145,25 +159,16 @@ public:
 
         int begins[PiecesLeft];
         int ends[PiecesLeft];
-        //int indices[PiecesLeft];
 
         const int (&candidatesOffsets_)[PiecesCount + 1] = candidatesOffsets[pos][code];
-        for (int candidate = 0; candidate < PiecesLeft; candidate++) {
-            stats.PieceCandidate(ActualPiece);
-            const int piece = permutationOrder[ActualPiece + candidate];
-            //indices[candidate] = position * PiecesCount + piece;
-            begins[candidate] = candidatesOffsets_[piece];
-            ends[candidate] = candidatesOffsets_[piece + 1];
-        }
+
+        GetBeginEnd<ActualPiece>(begins, ends, candidatesOffsets_);
 
         int validsCount = 0;
         int validCandidates[MaxCandidatesPerPosition];
         int validIndices[MaxCandidatesPerPosition];
 
-        for (int candidate = 0; candidate < PiecesLeft; candidate++) {
-            //addValidCandidates[indices[candidate]](grid, ActualPiece + candidate, begins[candidate], ends[candidate], validCandidates, validIndices, validsCount, candidatesMask);
-            AddValidCandies(grid, ActualPiece + candidate, begins[candidate], ends[candidate], validCandidates, validIndices, validsCount, candidatesMask);
-        }
+        AddValidCands<ActualPiece>(grid, begins, ends, validCandidates, validIndices, validsCount);
 
         if (!validsCount)
             return;
@@ -243,6 +248,18 @@ public:
         (void)addValidCandidates;
         (void)permutationOrder;
         (void)stats;
+    }
+
+    template<int Offset>
+    void GetBeginEnd(int*, int*, const int*) const {
+    }
+
+    template<int Offset>
+    void AddValids(uint64_t, const int*, int*, int*, int&) const {
+    }
+
+    template<int Offset>
+    void AddValidCands(uint64_t, const int*, const int*, int*, int*, int&) const {
     }
 
     void Solve(uint64_t grid, int position) {
