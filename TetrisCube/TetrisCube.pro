@@ -51,7 +51,9 @@ HEADERS += \
     Main.h \
     Timer.h \
     BoardLoader.h \
-    Coder.h
+    Coder.h \
+    CandidatesT.h \
+    Constants.h
 unix:!symbian {
     maemo5 {
         target.path = /opt/usr/lib

@@ -6,20 +6,9 @@
 
 #include <list>
 
-enum {
-    PositionsCount = 64,
-    PiecesCount = 12,
-    MaxRotations = 24,
-    MaxCandidatesPerPosition = PiecesCount * MaxRotations,
-    PiecesTimesPosition = PiecesCount * PositionsCount
-};
-
-struct SituationT {
-    int pieces[PiecesCount];
-};
-
 struct MaskBit {
 
+    _force_inline
     static int GetNextValid(uint64_t grid, int position) {
 //        while (grid & (1LL << position))
 //            position++;
@@ -29,6 +18,7 @@ struct MaskBit {
 
 private:
 
+    _force_inline
     int GetNextValid_(uint64_t grid, int position) const {
         int pos = nextValid[(grid >> position) & 0xff];
         if (pos >= 0)
@@ -57,19 +47,11 @@ private:
     int nextValid[256];
 };
 
-typedef const int (&CandidatesOffsets)[PositionsCount][CodesCount][PiecesCount + 1];
-//typedef const int (&CandidatesOffsets)[PositionsCount][PiecesCount + 1];
-typedef const uint64_t* CandidatesMask;
-
-typedef void (*AddValidCandidatesFunc)(uint64_t , int, int, int, int*, int*, int&, CandidatesMask);
-typedef AddValidCandidatesFunc (&AddValidCandidates)[PiecesTimesPosition];
-
 template<int ActualPiece>
 class SolverT_T {
 
     CandidatesOffsets candidatesOffsets;
     CandidatesMask candidatesMask;
-    AddValidCandidates addValidCandidates;
 
     int (&permutationOrder)[PiecesCount];
     int& currentSituation;
@@ -86,7 +68,6 @@ public:
 
     static void SolveX(CandidatesOffsets candidatesOffsets,
                        CandidatesMask candidatesMask,
-                       AddValidCandidates addValidCandidates,
                        int (&permutationOrder)[PiecesCount],
                        SituationT& currentSituation,
                        std::list<SituationT>& solutions,
@@ -95,37 +76,32 @@ public:
                        int position,
                        Stats& stats) {
         if (ActualPiece == minPiece) {
-            SolverT_T<ActualPiece> solver(candidatesOffsets, candidatesMask, addValidCandidates,
+            SolverT_T<ActualPiece> solver(candidatesOffsets, candidatesMask,
                                           permutationOrder, currentSituation, solutions, stats);
             solver.Solve(grid, position);
         }
         else {
-            SolverT_T<ActualPiece + 1>::SolveX(candidatesOffsets, candidatesMask, addValidCandidates, permutationOrder,
+            SolverT_T<ActualPiece + 1>::SolveX(candidatesOffsets, candidatesMask, permutationOrder,
                                                currentSituation, solutions, minPiece, grid, position, stats);
         }
     }
 
     SolverT_T(CandidatesOffsets candidatesOffsets,
               CandidatesMask candidatesMask,
-              AddValidCandidates addValidCandidates,
               int (&permutationOrder)[PiecesCount],
               SituationT& currentSituation,
               std::list<SituationT>& solutions,
               Stats& stats)
         : candidatesOffsets(candidatesOffsets),
           candidatesMask(candidatesMask),
-          addValidCandidates(addValidCandidates),
           permutationOrder(permutationOrder),
           currentSituation(currentSituation.pieces[ActualPiece]),
           stats(stats),
-          nextSolver(candidatesOffsets, candidatesMask, addValidCandidates,
+          nextSolver(candidatesOffsets, candidatesMask,
                      permutationOrder, currentSituation, solutions, stats) {
     }
 
-    static void AddNoCandies(uint64_t , int, int, int, int*, int*, int&, CandidatesMask) {
-    }
-
-    template<int Offset>
+    template<int Offset> _force_inline
     void GetBeginEnd(int* begins, int* ends, const int (&candidatesOffsets_)[PiecesCount + 1]) const {
         stats.PieceCandidate(Offset);
         const int piece = permutationOrder[ActualPiece];
@@ -134,7 +110,7 @@ public:
         nextSolver.template GetBeginEnd<Offset>(begins, ends, candidatesOffsets_);
     }
 
-    template<int Offset>
+    template<int Offset> _force_inline
     void AddValidCands(uint64_t grid, const int* begins, const int* ends, int* validCandidates, int* validIndices, int& validsCount) const {
         const int begin = begins[ActualPiece - Offset];
         const int end = ends[ActualPiece - Offset];
@@ -150,23 +126,23 @@ public:
         nextSolver.template AddValidCands<Offset>(grid, begins, ends, validCandidates, validIndices, validsCount);
     }
 
+    int begins[PiecesLeft];
+    int ends[PiecesLeft];
+    int validCandidates[MaxCandidatesPerPosition];
+    int validIndices[MaxCandidatesPerPosition];
+
+    _force_inline
     void Solve(const uint64_t grid, const int position) {
         stats.Next();
 
-        const int current = permutationOrder[ActualPiece];
         const int pos = MaskBit::GetNextValid(grid, position);
         const int code = Coder::GetCode(grid, pos);
-
-        int begins[PiecesLeft];
-        int ends[PiecesLeft];
 
         const int (&candidatesOffsets_)[PiecesCount + 1] = candidatesOffsets[pos][code];
 
         GetBeginEnd<ActualPiece>(begins, ends, candidatesOffsets_);
 
         int validsCount = 0;
-        int validCandidates[MaxCandidatesPerPosition];
-        int validIndices[MaxCandidatesPerPosition];
 
         AddValidCands<ActualPiece>(grid, begins, ends, validCandidates, validIndices, validsCount);
 
@@ -174,7 +150,9 @@ public:
             return;
 
         int other = ActualPiece;
+        const int current = permutationOrder[ActualPiece];
         for (int index = 0; index < validsCount; index++) {
+            stats.ValidCandidate(ActualPiece);
             const int c = validCandidates[index];
             const int i = validIndices[index];
             currentSituation = i;
@@ -187,17 +165,20 @@ public:
 
 private:
 
+    _force_inline
     void Take(const int index, const int other, const int current) {
         permutationOrder[other] = permutationOrder[ActualPiece];
         permutationOrder[ActualPiece] = permutationOrder[index];
         permutationOrder[index] = current;
     }
 
+    _force_inline
     void Swap(const int index, const int current) {
         permutationOrder[ActualPiece] = permutationOrder[index];
         permutationOrder[index] = current;
     }
 
+    _force_inline
     void SwapBack(const int index, const int current) {
         permutationOrder[index] = permutationOrder[ActualPiece];
         permutationOrder[ActualPiece] = current;
@@ -214,7 +195,6 @@ public:
 
     static void SolveX(CandidatesOffsets candidatesOffsets,
                        CandidatesMask candidatesMask,
-                       AddValidCandidates addValidCandidates,
                        int (&permutationOrder)[PiecesCount],
                        SituationT& currentSituation,
                        std::list<SituationT>& solutions,
@@ -224,7 +204,6 @@ public:
                        Stats& stats) {
         (void)candidatesOffsets;
         (void)candidatesMask;
-        (void)addValidCandidates;
         (void)permutationOrder;
         (void)currentSituation;
         (void)solutions;
@@ -236,7 +215,6 @@ public:
 
     SolverT_T(CandidatesOffsets candidatesOffsets,
               CandidatesMask candidatesMask,
-              AddValidCandidates addValidCandidates,
               int (&permutationOrder)[PiecesCount],
               SituationT& currentSituation,
               std::list<SituationT>& solutions,
@@ -245,23 +223,19 @@ public:
           solutions(solutions) {
         (void)candidatesOffsets;
         (void)candidatesMask;
-        (void)addValidCandidates;
         (void)permutationOrder;
         (void)stats;
     }
 
-    template<int Offset>
+    template<int Offset> _force_inline
     void GetBeginEnd(int*, int*, const int*) const {
     }
 
-    template<int Offset>
-    void AddValids(uint64_t, const int*, int*, int*, int&) const {
-    }
-
-    template<int Offset>
+    template<int Offset> _force_inline
     void AddValidCands(uint64_t, const int*, const int*, int*, int*, int&) const {
     }
 
+    _force_inline
     void Solve(uint64_t grid, int position) {
         (void)grid;
         (void)position;
@@ -287,14 +261,7 @@ public:
                       int position,
                       Stats& stats)
     {
-        AddValidCandidatesFunc addValidCandidates[PiecesTimesPosition];
-//        for (int i = 0; i < PiecesTimesPosition; i++) {
-//            const int pos = i / PiecesCount;
-//            const int piece = i % PiecesCount;
-//            addValidCandidates[i] = candidatesOffsets[pos][piece] < candidatesOffsets[pos][piece + 1] ?
-//                        &SolverT_T<0>::AddValidCandies : &SolverT_T<0>::AddNoCandies;
-//        };
-        SolverT_T<0>::SolveX(candidatesOffsets, candidatesMask, addValidCandidates, permutationOrder,
+        SolverT_T<0>::SolveX(candidatesOffsets, candidatesMask, permutationOrder,
                              currentSituation, solutions, minPiece, grid, position, stats);
     }
 

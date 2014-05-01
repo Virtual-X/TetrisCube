@@ -35,18 +35,21 @@ public:
     void ConfigCandidate(int index) {
         count[cc + ic + index]++;
     }
+    void ValidCandidate(int index) {
+        count[cc + ic * 2 + index]++;
+    }
 private:
 
     static const int cc = 4;
     static const int ic = 12;
-    static const int vc = 2;
+    static const int vc = 3;
     static const int nc = cc + ic * vc;
 
 #ifdef STATS
     void PrintStats() {
         std::cout << "Stats" << std::endl;
         std::vector<std::string> names{"Next", "Increase", "Decrease", "Pos++",
-                                      "PieceCandidate", "ConfigCandidate"};
+                                      "PieceCandidate", "ConfigCandidate", "ValidCandidate"};
         for (int i = 0; i < cc; i++)
             std::cout << "    " << names[i] << ": " << Format(count[i]) << std::endl;
         for (int j = 0; j < vc; j++) {

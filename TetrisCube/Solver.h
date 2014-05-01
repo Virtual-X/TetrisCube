@@ -4,10 +4,10 @@
 #include "SolverT.h"
 
 #include "Solution.h"
-
 #include "CandidatesCalculator.h"
 
 #include "UnsortedPermutator.h"
+#include "CandidatesT.h"
 
 #include <list>
 #include <functional>
@@ -17,10 +17,9 @@
 #include <sstream>
 
 #define BIT_GRID
-#define USE_AVX
+#define USE_AVX_
 
 #include <immintrin.h>
-
 
 class Solver {
 private:
@@ -49,12 +48,6 @@ private:
     const std::vector<std::vector<FixedPieces>>& candidatesPerPiece;
     const std::vector<FixedPieces>* actualCandidates;
 
-    enum {
-        PiecesCount = 12,
-        MaxRotations = 24,
-        MaxCandidatesPerPos = 200,
-    };
-
     Ints currentCandidatesIndex;
     Ints validCandidatesIndex;
 
@@ -63,41 +56,12 @@ private:
         int rotation;
     };
 
-    cd validCandidates[PiecesCount][MaxCandidatesPerPos];
+    cd validCandidates[PiecesCount][MaxCandidatesPerPosition];
     int validCandidatesRotationCount[PiecesCount];
 
     int minPieceSize;
 
     std::shared_ptr<Stats> stats;
-
-    struct CandidatesT {
-        int candidatesOffsets[PositionsCount][CodesCount][PiecesCount + 1];
-        CandidatesMask candidatesMask;
-        std::vector<const FixedPiece*> candidatesPointers;
-
-        CandidatesT(const std::vector<std::vector<FixedPieces>>& candidatesPerPiece) {
-            for (int j = 0; j < PositionsCount; j++) {
-                for (int k = 0; k < CodesCount; k++) {
-                    candidatesOffsets[j][k][0] = (int)candidatesMaskBuffer.size();
-                    for (int i = 0; i < PiecesCount; i++) {
-                        const FixedPieces& candidates = candidatesPerPiece[j][i];
-                        for (const auto& c : candidates) {
-                            if (Coder::IsCompatible(c.bitset, j, k)) {
-                                candidatesMaskBuffer.push_back(c.bitset);
-                                candidatesPointers.push_back(&c);
-                            }
-                        }
-                        candidatesOffsets[j][k][i + 1] = (int)candidatesMaskBuffer.size();
-                    }
-                }
-            }
-
-            candidatesMask = &candidatesMaskBuffer[0];
-        }
-
-    private:
-        std::vector<uint64_t> candidatesMaskBuffer;
-    };
 
     std::shared_ptr<const CandidatesT> candidatesT;
 
@@ -147,11 +111,34 @@ public:
           minPieceSize(0),
           stats(new Stats())
     {
-        //Coords order;
-        //auto d = CandidatesCalculator(board).GetSnakeCandidates(order);
-        //auto d = CandidatesCalculator(board).GetOptimalCandidates(order);
-        //auto c = CandidatesCalculator(board).Reorder(d, order);
+#ifdef REORDER
+        Coords order;
+        auto d = CandidatesCalculator(board).GetSnakeCandidates(order);
+//        auto d = CandidatesCalculator(board).GetOptimalCandidates(order);
+        auto c = CandidatesCalculator(board).Reorder(d, order);
+//        auto c = CandidatesCalculator(board).GetCandidates();
+
+        Ints o(64);
+        for (int p = 0; p < 64; p++) {
+//            o.push_back(order[p].GetIndex1D(gridSize));
+            o[order[p].GetIndex1D(gridSize)] = p;
+//            o.push_back(p);
+        }
+
+        int off[8] = { 1, 2, 3, 4, 5, 15, 16, 17};
+        static int ord[64 * 8];
+        for (int p = 0; p < 64; p++) {
+            int index = 0;
+            for (; o[index] != p; index++);
+            for (int i = 0; i < 8; i++) {
+                ord[p * 8 + i] = index + off[i] < 64 ? o[index + off[i]] : 0;
+            }
+        }
+
+        Coder::order() = ord;
+#else
         auto c = CandidatesCalculator(board).GetCandidates();
+#endif
 
         Coord pos(Ints(gridSize.size()));
         Enumerate(pos, gridSize, [&] {
@@ -159,7 +146,7 @@ public:
             return true;
         });
 
-        candidatesT = std::make_shared<CandidatesT>(candidatesPerPiece);
+        candidatesT = std::make_shared<CandidatesT>(candidatesPerPieceData);
 
         for (int i = 0; i < piecesCount; i++) {
             currentCandidatesIndex[i] = -1;
@@ -245,14 +232,7 @@ public:
         catch (int) {
         }
 
-        for (const auto& s : solutions) {
-            FixedPieces p;
-            p.reserve(PiecesCount);
-            for (int i = 0; i < PiecesCount; i++) {
-                p.push_back(*candidatesT->candidatesPointers[s.pieces[i]]);
-            }
-            this->solutions.push_back(Solution(p));
-        }
+        candidatesT->Convert(solutions, this->solutions);
     }
 
     Solution GetCurrentSituation() const {
@@ -324,6 +304,7 @@ private:
         validCandidatesRotationCount[actualPiece] = n;
     }
 
+#ifdef USE_AVX
     void CalculateValidCandidatesAvx() {
         uint64_t g = grid.GetBits();
         uint64_t b[] = { g, g, g, g };
@@ -358,6 +339,7 @@ private:
         }
         validCandidatesRotationCount[actualPiece] = n;
     }
+#endif
 
     void CalculateValidCandidates() {
         CalculateValidCandidatesNaive();

@@ -3,15 +3,17 @@
 #include "Timer.h"
 #include "BoardLoader.h"
 
-#define STATS_
-//#define MAX_SOLUTIONS_T 8
+//#define STATS
+#define MAX_SOLUTIONS_T 3
 #define TEMPLATE_T
+//#define REORDER
+//#define FORCE_INLINE
 
 static const int numThreads = 16;
 
 #ifdef MAX_SOLUTIONS_T
 static const int splitLevel = 1;
-static const int maxSolvers = 12;
+static const int maxSolvers = 34;
 static const size_t solverPerDisplay = 1;
 #else
 static const int splitLevel = 2;
