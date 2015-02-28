@@ -21,6 +21,8 @@
 #include <GL/glew.h>
 #include "Bitmap.h"
 
+#include <vector>
+
 namespace tdogl {
     
     /**
@@ -28,6 +30,9 @@ namespace tdogl {
      */
     class Texture {
     public:
+
+        Texture(GLuint object, GLfloat width, GLfloat height, GLfloat depth);
+
         /**
          Creates a texture from a bitmap.
          
@@ -43,11 +48,18 @@ namespace tdogl {
                 GLint minMagFiler = GL_LINEAR,
                 GLint wrapMode = GL_CLAMP_TO_EDGE);
         
+        Texture(const std::vector<const Bitmap*>& bitmaps,
+                GLint minMagFiler = GL_LINEAR,
+                GLint wrapMode = GL_CLAMP_TO_EDGE);
+
         /**
          Deletes the texture object with glDeleteTextures
          */
         ~Texture();
         
+        void use(GLenum textureUnit);
+        void stopUsing();
+
         /**
          @result The texure object, as created by glGenTextures
          */
@@ -56,18 +68,24 @@ namespace tdogl {
         /**
          @result The original width (in pixels) of the bitmap this texture was made from
          */
-        GLfloat originalWidth() const;
+        GLfloat width() const;
 
         /**
          @result The original height (in pixels) of the bitmap this texture was made from
          */
-        GLfloat originalHeight() const;
+        GLfloat height() const;
         
+        GLfloat depth() const;
+
     private:
+        GLenum _textureUnit;
+        GLenum _target;
+
         GLuint _object;
-        GLfloat _originalWidth;
-        GLfloat _originalHeight;
-        
+        GLfloat _width;
+        GLfloat _height;
+        GLfloat _depth;
+
         //copying disabled
         Texture(const Texture&);
         const Texture& operator=(const Texture&);

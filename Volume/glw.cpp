@@ -13,20 +13,20 @@
 
 #include <iostream>
 
-static std::string GetProcessPath() {
-    return "/home/igor/Development/qt-workspace/App/Volume";
-}
+//static std::string GetProcessPath() {
+//    return "/home/igor/Development/qt-workspace/App/Volume";
+//}
 
-static std::string ResourcePath(std::string fileName) {
-    return GetProcessPath() + "/data/" + fileName;
-}
+//static std::string ResourcePath(std::string fileName) {
+//    return GetProcessPath() + "/data/" + fileName;
+//}
 
 GLW::GLW(QWidget *parent) :
     QGLWidget(parent)
 {
-    BoardLoader bl;
-    auto filename = ResourcePath("Tetris3.xml");
-    auto b = bl.Load(filename.c_str());
+//    BoardLoader bl;
+//    auto filename = ResourcePath("Tetris3.xml");
+//    auto b = bl.Load(filename.c_str());
 }
 
 GLW::~GLW()
@@ -122,16 +122,17 @@ void GLW::DrawBackground()
 {
     //glActiveTexture(GL_TEXTURE0);
 
-    glClear(GL_DEPTH_BUFFER_BIT);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+//    glMatrixMode(GL_PROJECTION);
+//    glLoadIdentity();
+//    glMatrixMode(GL_MODELVIEW);
+//    glLoadIdentity();
 
-    glClear(GL_COLOR_BUFFER_BIT);
-    return;
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //return;
 
     glDisable(GL_DEPTH_TEST);
+    glActiveTexture(GL_TEXTURE0);
+    glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, textureBackground);
     glBegin(GL_TRIANGLE_STRIP);
     glTexCoord2i(0, 0); glVertex2i(-1, -1);
@@ -139,6 +140,7 @@ void GLW::DrawBackground()
     glTexCoord2i(0, 1); glVertex2i(-1, 1);
     glTexCoord2i(1, 1); glVertex2i(1, 1);
     glEnd();
+    glBindTexture(GL_TEXTURE_2D, 0);
     glEnable(GL_DEPTH_TEST);
 }
 
